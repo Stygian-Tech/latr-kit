@@ -1,21 +1,5 @@
 import Foundation
 
-public enum SavedLibraryError: Error, Sendable {
-    case invalidURL
-    case itemNotFound
-}
-
-public struct ExternalSaveReference: Sendable {
-    public let normalizedURL: String
-    public let recordKey: String
-    public let wrapperURI: String
-}
-
-public struct SavedItemReference: Sendable {
-    public let uri: String
-    public let recordKey: String
-}
-
 /// Orchestrates L@tr save, list, and state workflows against a repository.
 public struct SavedLibrary: Sendable {
     public let repository: any RepositoryClient

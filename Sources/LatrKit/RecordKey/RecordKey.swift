@@ -41,15 +41,3 @@ public enum RecordKey {
         return out
     }
 }
-
-public enum ATURI {
-    public static func externalSave(repositoryDID: String, recordKey: String) -> String {
-        "at://\(repositoryDID)/\(LexiconCollection.external.identifier)/\(recordKey)"
-    }
-}
-
-enum Timestamp {
-    static func iso8601Now() -> String {
-        ISO8601DateFormatter().string(from: Date())
-    }
-}
