@@ -28,22 +28,38 @@ public struct SubjectPreviewResolver: Sendable {
             return OpenGraphPreview()
         }
 
-        if parts.collection == LexiconCollection.external.identifier {
-            if let record: RepositoryRecord<ExternalSave> = try? await repository.record(
-                in: parts.repo,
-                collection: .external,
-                withKey: parts.rkey
-            ) {
+        if LexiconURI.isExternalWrapper(subjectURI) {
+            if let lexicon = LexiconCollection(rawValue: parts.collection),
+               lexicon == .external || lexicon == .legacyExternal,
+               let record: RepositoryRecord<ExternalSave> = try? await repository.record(
+                   in: parts.repo,
+                   collection: lexicon,
+                   withKey: parts.rkey
+               )
+            {
                 return previewFromExternalSave(record.value)
             }
+
+            if let untyped,
+               let json = await untyped.recordValue(
+                   in: parts.repo,
+                   collection: parts.collection,
+                   withKey: parts.rkey
+               )
+            {
+                return previewFromExternalJSON(json)
+            }
+
             return OpenGraphPreview()
         }
 
-        if let untyped, let json = await untyped.recordValue(
-            in: parts.repo,
-            collection: parts.collection,
-            withKey: parts.rkey
-        ) {
+        if let untyped,
+           let json = await untyped.recordValue(
+               in: parts.repo,
+               collection: parts.collection,
+               withKey: parts.rkey
+           )
+        {
             return previewFromGenericRecord(json)
         }
 
@@ -93,6 +109,16 @@ public struct SubjectPreviewResolver: Sendable {
             image: trimmedNonEmpty(record.image),
             siteName: trimmedNonEmpty(record.site),
             author: trimmedNonEmpty(record.author)
+        )
+    }
+
+    private func previewFromExternalJSON(_ json: [String: Any]) -> OpenGraphPreview {
+        OpenGraphPreview(
+            title: trimmedNonEmpty(json["title"] as? String),
+            description: trimmedNonEmpty(json["excerpt"] as? String),
+            image: trimmedNonEmpty(json["image"] as? String),
+            siteName: trimmedNonEmpty(json["site"] as? String),
+            author: trimmedNonEmpty(json["author"] as? String)
         )
     }
 

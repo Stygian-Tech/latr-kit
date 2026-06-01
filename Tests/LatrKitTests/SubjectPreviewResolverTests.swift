@@ -29,7 +29,7 @@ final class SubjectPreviewResolverTests: XCTestCase {
         ])
         let resolver = SubjectPreviewResolver(repository: repo)
         let preview = await resolver.preview(
-            for: "at://did:plc:test/com.latr.saved.external/ext-key"
+            for: "at://did:plc:test/link.latr.saved.external/ext-key"
         )
 
         XCTAssertEqual(preview.title, "Article")
@@ -37,6 +37,24 @@ final class SubjectPreviewResolverTests: XCTestCase {
         XCTAssertEqual(preview.siteName, "Example")
         XCTAssertEqual(preview.image, "https://example.com/thumb.png")
         XCTAssertEqual(preview.author, "Ada")
+    }
+
+    func testPreviewFromLegacyExternalSaveRecord() async {
+        let repo = MockRepository(records: [
+            "ext-key": ExternalSave(
+                url: "https://example.com",
+                normalizedUrl: "https://example.com",
+                fingerprint: "abc",
+                createdAt: "2026-01-01T00:00:00Z",
+                title: "Legacy Article"
+            ),
+        ])
+        let resolver = SubjectPreviewResolver(repository: repo)
+        let preview = await resolver.preview(
+            for: "at://did:plc:test/com.latr.saved.external/ext-key"
+        )
+
+        XCTAssertEqual(preview.title, "Legacy Article")
     }
 
     func testPreviewFromAppViewPost() async {
@@ -66,6 +84,8 @@ private struct MockAppView: AppViewFeedClient {
     func postPreview(for subjectURI: String) async -> AppViewPostPreview? {
         posts[subjectURI]
     }
+
+    func resolveActorDID(_ actor: String) async -> String? { nil }
 }
 
 private struct MockRepository: RepositoryClient {
@@ -85,7 +105,11 @@ private struct MockRepository: RepositoryClient {
         collection: LexiconCollection,
         withKey key: String
     ) async throws -> RepositoryRecord<Value>? where Value: Codable & Sendable {
-        guard collection == .external, let value = records[key] else { return nil }
+        guard collection == .external || collection == .legacyExternal,
+              let value = records[key]
+        else {
+            return nil
+        }
         let encoded = try JSONEncoder().encode(value)
         let decoded = try JSONDecoder().decode(Value.self, from: encoded)
         return RepositoryRecord(

@@ -12,13 +12,7 @@ public enum OpenGraphMerger {
         )
     }
 
-    private static func filled(_ value: String?) -> String? {
-        guard let value else { return nil }
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    static func externalSaveNeedsPreview(_ record: ExternalSave) -> Bool {
+    public static func externalSaveNeedsPreview(_ record: ExternalSave) -> Bool {
         !hasFilledString(record.title)
             || !hasFilledString(record.image)
             || !hasFilledString(record.excerpt)
@@ -26,7 +20,7 @@ public enum OpenGraphMerger {
             || !hasFilledString(record.author)
     }
 
-    static func savedItemNeedsPreview(_ record: SavedItem) -> Bool {
+    public static func savedItemNeedsPreview(_ record: SavedItem) -> Bool {
         !hasFilledString(record.previewTitle)
             || !hasFilledString(record.previewImage)
             || !hasFilledString(record.previewExcerpt)
@@ -34,12 +28,7 @@ public enum OpenGraphMerger {
             || !hasFilledString(record.previewAuthor)
     }
 
-    private static func hasFilledString(_ value: String?) -> Bool {
-        guard let value else { return false }
-        return !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    }
-
-    static func merging(into existing: ExternalSave, preview: OpenGraphPreview) -> ExternalSave? {
+    public static func merging(into existing: ExternalSave, preview: OpenGraphPreview) -> ExternalSave? {
         var merged = existing
 
         if let title = preview.title,
@@ -71,7 +60,7 @@ public enum OpenGraphMerger {
         return merged == existing ? nil : merged
     }
 
-    static func merging(into existing: SavedItem, preview: OpenGraphPreview) -> SavedItem? {
+    public static func merging(into existing: SavedItem, preview: OpenGraphPreview) -> SavedItem? {
         var merged = existing
 
         if let title = preview.title,
@@ -101,5 +90,15 @@ public enum OpenGraphMerger {
         }
 
         return merged == existing ? nil : merged
+    }
+
+    private static func filled(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private static func hasFilledString(_ value: String?) -> Bool {
+        filled(value) != nil
     }
 }
