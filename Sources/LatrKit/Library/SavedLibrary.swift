@@ -10,6 +10,21 @@ public struct SavedLibrary: Sendable {
         self.repositoryDID = repositoryDID
     }
 
+    /// Fetches a single bounded page of saved items. Callers must continue
+    /// paging while `cursor` is non-nil; a page may hold fewer than `limit`
+    /// records and still have more pages remaining.
+    public func savedItems(
+        limit: Int,
+        startingAfter cursor: String? = nil
+    ) async throws -> RecordList<SavedItem> {
+        try await repository.listRecords(
+            in: repositoryDID,
+            collection: .savedItem,
+            limit: min(max(limit, 1), 100),
+            startingAfter: cursor
+        )
+    }
+
     public func savedItems() async throws -> [RepositoryRecord<SavedItem>] {
         var all: [RepositoryRecord<SavedItem>] = []
         var cursor: String?

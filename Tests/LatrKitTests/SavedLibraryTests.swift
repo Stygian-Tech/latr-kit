@@ -73,6 +73,60 @@ final class SavedLibraryTests: XCTestCase {
         XCTAssertTrue(repository.hasRecord(collection: .external, key: externalKey))
     }
 
+    func testSavedItemsPageReturnsBoundedPageWithCursor() async throws {
+        let (library, _) = library()
+        for index in 0..<5 {
+            _ = try await library.upsertSavedItem(
+                subjectURI: "at://did:plc:author/app.bsky.feed.post/page\(index)"
+            )
+        }
+
+        let first = try await library.savedItems(limit: 2)
+        XCTAssertEqual(first.records.count, 2)
+        XCTAssertNotNil(first.cursor)
+    }
+
+    func testSavedItemsPageCursorYieldsDisjointPagesAndTerminates() async throws {
+        let (library, _) = library()
+        for index in 0..<5 {
+            _ = try await library.upsertSavedItem(
+                subjectURI: "at://did:plc:author/app.bsky.feed.post/page\(index)"
+            )
+        }
+
+        var paged: [String] = []
+        var cursor: String?
+        var pages = 0
+        repeat {
+            let page = try await library.savedItems(limit: 2, startingAfter: cursor)
+            let uris = page.records.map(\.uri)
+            XCTAssertTrue(Set(paged).isDisjoint(with: uris))
+            paged.append(contentsOf: uris)
+            cursor = page.cursor
+            pages += 1
+        } while cursor != nil
+
+        XCTAssertEqual(pages, 3)
+        let all = try await library.savedItems()
+        XCTAssertEqual(paged, all.map(\.uri))
+    }
+
+    func testSavedItemsPageClampsLimit() async throws {
+        let (library, _) = library()
+        for index in 0..<3 {
+            _ = try await library.upsertSavedItem(
+                subjectURI: "at://did:plc:author/app.bsky.feed.post/clamp\(index)"
+            )
+        }
+
+        let zeroLimit = try await library.savedItems(limit: 0)
+        XCTAssertEqual(zeroLimit.records.count, 1)
+
+        let hugeLimit = try await library.savedItems(limit: 500)
+        XCTAssertEqual(hugeLimit.records.count, 3)
+        XCTAssertNil(hugeLimit.cursor)
+    }
+
     func testExternalSaveDisplayTitlePrefersTitleThenSiteThenURL() {
         let bare = ExternalSave(
             url: "https://fallback.example",
