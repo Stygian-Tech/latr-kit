@@ -57,7 +57,8 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
         in repository: String,
         collection: LexiconCollection,
         withKey key: String,
-        value: some Encodable & Sendable
+        value: some Encodable & Sendable,
+        swapRecord: String?
     ) async throws -> UpdateRecordResponse {
         let uri = "at://\(repository)/\(collection.identifier)/\(key)"
         let json = try JSONEncoder().encode(value)
@@ -68,7 +69,8 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
     func deleteRecord(
         in repository: String,
         collection: LexiconCollection,
-        withKey key: String
+        withKey key: String,
+        swapRecord: String?
     ) async throws {
         store.removeValue(forKey: storeKey(collection: collection, key: key))
     }
