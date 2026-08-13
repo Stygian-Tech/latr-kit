@@ -159,26 +159,32 @@ public struct SavedLibrary: Sendable {
     }
 
     public func setState(ofSavedItemWithKey key: String, to state: SavedItemState) async throws {
-        guard let current = try await savedItem(withKey: key) else {
-            throw SavedLibraryError.itemNotFound
+        for attempt in 0 ... 1 {
+            guard let current = try await savedItem(withKey: key) else { throw SavedLibraryError.itemNotFound }
+            var next = current.value
+            next.state = state
+            do {
+                _ = try await repository.updateRecord(
+                    in: repositoryDID, collection: .savedItem, withKey: key,
+                    value: next, swapRecord: current.cid
+                )
+                return
+            } catch RepositoryClientError.conflict where attempt == 0 { continue }
+            catch RepositoryClientError.conflict { throw SavedLibraryError.conflict }
         }
-
-        var next = current.value
-        next.state = state
-        _ = try await repository.updateRecord(
-            in: repositoryDID,
-            collection: .savedItem,
-            withKey: key,
-            value: next
-        )
     }
 
     public func removeSavedItem(withKey key: String) async throws {
-        try await repository.deleteRecord(
-            in: repositoryDID,
-            collection: .savedItem,
-            withKey: key
-        )
+        for attempt in 0 ... 1 {
+            guard let current = try await savedItem(withKey: key) else { throw SavedLibraryError.itemNotFound }
+            do {
+                try await repository.deleteRecord(
+                    in: repositoryDID, collection: .savedItem, withKey: key, swapRecord: current.cid
+                )
+                return
+            } catch RepositoryClientError.conflict where attempt == 0 { continue }
+            catch RepositoryClientError.conflict { throw SavedLibraryError.conflict }
+        }
     }
 
     public func removeExternalSave(for url: String, includingWrapper: Bool = false) async throws {

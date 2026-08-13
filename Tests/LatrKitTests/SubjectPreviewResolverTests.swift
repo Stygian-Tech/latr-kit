@@ -132,7 +132,8 @@ private struct MockRepository: RepositoryClient {
         in repository: String,
         collection: LexiconCollection,
         withKey key: String,
-        value: some Encodable & Sendable
+        value: some Encodable & Sendable,
+        swapRecord: String?
     ) async throws -> UpdateRecordResponse {
         UpdateRecordResponse(uri: "at://\(repository)/\(collection.identifier)/\(key)")
     }
@@ -140,6 +141,7 @@ private struct MockRepository: RepositoryClient {
     func deleteRecord(
         in repository: String,
         collection: LexiconCollection,
-        withKey key: String
+        withKey key: String,
+        swapRecord: String?
     ) async throws {}
 }

@@ -24,12 +24,32 @@ public protocol RepositoryClient: Sendable {
         in repository: String,
         collection: LexiconCollection,
         withKey key: String,
-        value: some Encodable & Sendable
+        value: some Encodable & Sendable,
+        swapRecord: String?
     ) async throws -> UpdateRecordResponse
 
     func deleteRecord(
         in repository: String,
         collection: LexiconCollection,
-        withKey key: String
+        withKey key: String,
+        swapRecord: String?
     ) async throws
+}
+
+public extension RepositoryClient {
+    func updateRecord(
+        in repository: String, collection: LexiconCollection, withKey key: String,
+        value: some Encodable & Sendable
+    ) async throws -> UpdateRecordResponse {
+        try await updateRecord(in: repository, collection: collection, withKey: key, value: value, swapRecord: nil)
+    }
+
+    func deleteRecord(in repository: String, collection: LexiconCollection, withKey key: String) async throws {
+        try await deleteRecord(in: repository, collection: collection, withKey: key, swapRecord: nil)
+    }
+}
+
+public enum RepositoryClientError: Error, Sendable, Equatable {
+    case conflict
+    case invalidStoredRecord(uri: String)
 }
