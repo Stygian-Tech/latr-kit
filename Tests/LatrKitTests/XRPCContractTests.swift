@@ -3,9 +3,11 @@ import Testing
 @testable import LatrKit
 
 @Test func xrpcDescriptorsHaveStableVerbsAndCredentialPolicy() {
-    #expect(LatrXRPCMethod.all.count == 23)
+    #expect(LatrXRPCMethod.all.count == 24)
     #expect(LatrXRPCMethod.listBookmarks.verb == "GET")
     #expect(LatrXRPCMethod.saveBookmark.nsid == "link.latr.bookmarks.saveBookmark")
+    #expect(LatrXRPCMethod.syncBookmarkMetadata.nsid == "link.latr.bookmarks.syncMetadata")
+    #expect(LatrXRPCMethod.syncBookmarkMetadata.verb == "POST")
     #expect(LatrXRPCMethod.listItems.verb == "GET")
     #expect(LatrXRPCMethod.saveURL.verb == "POST")
     #expect(!LatrXRPCMethod.listClients.requiresApplicationCredential)

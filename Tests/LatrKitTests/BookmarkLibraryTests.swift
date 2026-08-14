@@ -35,6 +35,123 @@ final class BookmarkLibraryTests: XCTestCase {
         XCTAssertEqual(updated?.metadataRecord?.value.state, .archived)
     }
 
+    func testSyncCreatesUnreadMetadataForExternalHTTPAndATBookmarks() async throws {
+        let repository = InMemoryRepository()
+        let library = SavedLibrary(repository: repository, repositoryDID: did)
+        let subjects = [
+            "https://Example.com/article?utm_source=encountered#section",
+            "at://did:plc:author/app.bsky.feed.post/3abc",
+        ]
+        for (index, subject) in subjects.enumerated() {
+            _ = try await repository.createRecord(
+                in: did,
+                collection: .bookmark,
+                withKey: "external-\(index)",
+                value: CommunityBookmark(subject: subject, createdAt: "2026-01-0\(index + 1)T00:00:00Z")
+            )
+        }
+
+        let summary = try await library.syncBookmarkMetadata()
+
+        XCTAssertEqual(summary.scanned, 2)
+        XCTAssertEqual(summary.created, 2)
+        for (index, subject) in subjects.enumerated() {
+            let metadata: RepositoryRecord<BookmarkMetadata>? = try await repository.record(
+                in: did,
+                collection: .bookmarkMetadata,
+                withKey: "external-\(index)"
+            )
+            XCTAssertEqual(metadata?.value.bookmarkUri, "at://\(did)/\(LexiconCollection.bookmark.identifier)/external-\(index)")
+            XCTAssertEqual(metadata?.value.subject, subject)
+            XCTAssertEqual(metadata?.value.state, .unread)
+        }
+    }
+
+    func testSyncPreservesValidMetadataAndSkipsMismatchedSidecar() async throws {
+        let repository = InMemoryRepository()
+        let library = SavedLibrary(repository: repository, repositoryDID: did)
+        let validURI = "at://\(did)/\(LexiconCollection.bookmark.identifier)/valid"
+        let conflictURI = "at://\(did)/\(LexiconCollection.bookmark.identifier)/conflict"
+        _ = try await repository.createRecord(in: did, collection: .bookmark, withKey: "valid", value: CommunityBookmark(
+            subject: "https://example.com/valid", createdAt: "2026-01-01T00:00:00Z"
+        ))
+        _ = try await repository.createRecord(in: did, collection: .bookmarkMetadata, withKey: "valid", value: BookmarkMetadata(
+            bookmarkUri: validURI,
+            subject: "https://example.com/valid",
+            state: .archived,
+            unknownFields: ["future": .string("preserve")]
+        ))
+        _ = try await repository.createRecord(in: did, collection: .bookmark, withKey: "conflict", value: CommunityBookmark(
+            subject: "https://example.com/current", createdAt: "2026-01-02T00:00:00Z"
+        ))
+        _ = try await repository.createRecord(in: did, collection: .bookmarkMetadata, withKey: "conflict", value: BookmarkMetadata(
+            bookmarkUri: conflictURI,
+            subject: "https://example.com/stale",
+            state: .archived
+        ))
+
+        let summary = try await library.syncBookmarkMetadata()
+        let list = try await library.bookmarks()
+
+        XCTAssertEqual(summary.created, 0)
+        XCTAssertEqual(summary.reused, 1)
+        XCTAssertEqual(summary.skippedConflict, 1)
+        XCTAssertEqual(list.records.first { $0.uri == validURI }?.metadataRecord?.value.unknownFields["future"], .string("preserve"))
+        XCTAssertNil(list.records.first { $0.uri == conflictURI }?.metadataRecord)
+    }
+
+    func testSyncIsIdempotentAndCursorPaged() async throws {
+        let repository = InMemoryRepository()
+        let library = SavedLibrary(repository: repository, repositoryDID: did)
+        for index in 0 ..< 3 {
+            _ = try await repository.createRecord(in: did, collection: .bookmark, withKey: "page-\(index)", value: CommunityBookmark(
+                subject: "https://example.com/\(index)", createdAt: "2026-01-0\(index + 1)T00:00:00Z"
+            ))
+        }
+
+        let first = try await library.syncBookmarkMetadata(limit: 2)
+        let second = try await library.syncBookmarkMetadata(limit: 2, startingAfter: first.cursor)
+        let retry = try await library.syncBookmarkMetadata(limit: 2)
+
+        XCTAssertEqual(first.scanned, 2)
+        XCTAssertEqual(first.created, 2)
+        XCTAssertNotNil(first.cursor)
+        XCTAssertEqual(second.scanned, 1)
+        XCTAssertEqual(second.created, 1)
+        XCTAssertNil(second.cursor)
+        XCTAssertEqual(retry.created, 0)
+        XCTAssertEqual(retry.reused, 2)
+    }
+
+    func testSyncAtomicCreateConflictSucceedsOnRetry() async throws {
+        let repository = InMemoryRepository()
+        let library = SavedLibrary(repository: repository, repositoryDID: did)
+        let key = "racing"
+        let subject = "https://example.com/racing"
+        let uri = "at://\(did)/\(LexiconCollection.bookmark.identifier)/\(key)"
+        let repositoryDID = did
+        _ = try await repository.createRecord(in: did, collection: .bookmark, withKey: key, value: CommunityBookmark(
+            subject: subject, createdAt: "2026-01-01T00:00:00Z"
+        ))
+        repository.beforeNextApplyWrites { _ in
+            _ = try await repository.createRecord(
+                in: repositoryDID,
+                collection: .bookmarkMetadata,
+                withKey: key,
+                value: BookmarkMetadata(bookmarkUri: uri, subject: subject, state: .unread)
+            )
+        }
+
+        do {
+            _ = try await library.syncBookmarkMetadata()
+            XCTFail("Expected an atomic create conflict")
+        } catch RepositoryClientError.conflict {}
+
+        let retry = try await library.syncBookmarkMetadata()
+        XCTAssertEqual(retry.created, 0)
+        XCTAssertEqual(retry.reused, 1)
+    }
+
     func testMigrationFlattensWrapperPreservesStateAndIsRetrySafe() async throws {
         let repository = InMemoryRepository()
         let library = SavedLibrary(repository: repository, repositoryDID: did)

@@ -13,6 +13,7 @@ public struct LatrListBookmarksParameters: Codable, Sendable, Equatable { public
 public struct LatrListBookmarksOutput: Codable, Sendable { public let bookmarks: [BookmarkView]; public let cursor: String?; public init(bookmarks: [BookmarkView], cursor: String?) { self.bookmarks = bookmarks; self.cursor = cursor } }
 public struct LatrGetBookmarkOutput: Codable, Sendable { public let bookmark: BookmarkView?; public init(bookmark: BookmarkView?) { self.bookmark = bookmark } }
 public struct LatrSaveBookmarkInput: Codable, Sendable, Equatable { public let subject: String; public let tags: [String]?; public init(subject: String, tags: [String]? = nil) { self.subject = subject; self.tags = tags } }
+public struct LatrSyncBookmarkMetadataInput: Codable, Sendable, Equatable { public let limit: Int?; public let cursor: String?; public init(limit: Int? = nil, cursor: String? = nil) { self.limit = limit; self.cursor = cursor } }
 public struct LatrSetBookmarkStateInput: Codable, Sendable, Equatable { public let bookmarkUri: String; public let state: SavedItemState; public init(bookmarkUri: String, state: SavedItemState) { self.bookmarkUri = bookmarkUri; self.state = state } }
 public struct LatrDeleteBookmarkInput: Codable, Sendable, Equatable { public let bookmarkUri: String; public init(bookmarkUri: String) { self.bookmarkUri = bookmarkUri } }
 public struct LatrMigrateBookmarksInput: Codable, Sendable, Equatable { public let limit: Int?; public let cursor: String?; public init(limit: Int? = nil, cursor: String? = nil) { self.limit = limit; self.cursor = cursor } }
@@ -54,6 +55,10 @@ public struct LatrXRPCClient: Sendable {
     public func saveBookmark(_ input: LatrSaveBookmarkInput) async throws -> BookmarkView {
         try LatrPayloadValidator.validateSubject(input.subject)
         return try await procedure(.saveBookmark, input, as: BookmarkView.self)
+    }
+    public func syncBookmarkMetadata(_ input: LatrSyncBookmarkMetadataInput = .init()) async throws -> BookmarkMetadataSyncSummary {
+        if let limit = input.limit, !(1 ... 100).contains(limit) { throw LatrPayloadValidationError.invalidLimit }
+        return try await procedure(.syncBookmarkMetadata, input, as: BookmarkMetadataSyncSummary.self)
     }
     public func setBookmarkState(_ input: LatrSetBookmarkStateInput) async throws -> LatrSimpleOK {
         try LatrPayloadValidator.validateATURI(input.bookmarkUri)

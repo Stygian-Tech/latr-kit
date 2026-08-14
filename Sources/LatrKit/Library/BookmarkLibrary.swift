@@ -8,28 +8,14 @@ public extension SavedLibrary {
             limit: min(max(limit, 1), 100),
             startingAfter: cursor
         )
-        var metadataByKey: [String: RepositoryRecord<BookmarkMetadata>] = [:]
-        var metadataCursor: String?
-        repeat {
-            let metadataPage: RecordList<BookmarkMetadata> = try await repository.listRecords(
-                in: repositoryDID,
-                collection: .bookmarkMetadata,
-                limit: 100,
-                startingAfter: metadataCursor
-            )
-            for metadata in metadataPage.records {
-                if let key = LexiconURI.recordKey(from: metadata.uri) {
-                    metadataByKey[key] = metadata
-                }
-            }
-            metadataCursor = metadataPage.cursor
-        } while metadataCursor != nil
+        let metadataByKey = try await bookmarkMetadataByKey()
         var views: [BookmarkView] = []
         for record in page.records {
             guard let key = LexiconURI.recordKey(from: record.uri) else {
                 throw SavedLibraryError.invalidStoredRecord(uri: record.uri)
             }
-            views.append(BookmarkView(record: record, metadataRecord: metadataByKey[key]))
+            let metadata = metadataByKey[key].flatMap { bookmarkMetadata($0, matches: record) ? $0 : nil }
+            views.append(BookmarkView(record: record, metadataRecord: metadata))
         }
         return BookmarkList(records: views, cursor: page.cursor)
     }
@@ -52,7 +38,52 @@ public extension SavedLibrary {
         let metadata: RepositoryRecord<BookmarkMetadata>? = try await repository.record(
             in: repositoryDID, collection: .bookmarkMetadata, withKey: key
         )
-        return BookmarkView(record: selected, metadataRecord: metadata)
+        return BookmarkView(
+            record: selected,
+            metadataRecord: metadata.flatMap { bookmarkMetadata($0, matches: selected) ? $0 : nil }
+        )
+    }
+
+    func syncBookmarkMetadata(
+        limit rawLimit: Int = 50,
+        startingAfter cursor: String? = nil
+    ) async throws -> BookmarkMetadataSyncSummary {
+        let page: RecordList<CommunityBookmark> = try await repository.listRecords(
+            in: repositoryDID,
+            collection: .bookmark,
+            limit: min(max(rawLimit, 1), 100),
+            startingAfter: cursor
+        )
+        let metadataByKey = try await bookmarkMetadataByKey()
+        var summary = BookmarkMetadataSyncSummary(scanned: page.records.count, cursor: page.cursor)
+        var writes: [RepositoryWrite] = []
+
+        for bookmark in page.records {
+            guard let key = LexiconURI.recordKey(from: bookmark.uri) else {
+                throw SavedLibraryError.invalidStoredRecord(uri: bookmark.uri)
+            }
+            if let metadata = metadataByKey[key] {
+                if bookmarkMetadata(metadata, matches: bookmark) {
+                    summary.reused += 1
+                } else {
+                    summary.skippedConflict += 1
+                }
+                continue
+            }
+
+            let metadata = BookmarkMetadata(
+                bookmarkUri: bookmark.uri,
+                subject: bookmark.value.subject,
+                state: .unread
+            )
+            writes.append(try .creating(collection: .bookmarkMetadata, key: key, value: metadata))
+        }
+
+        if !writes.isEmpty {
+            try await repository.applyWrites(in: repositoryDID, writes: writes)
+            summary.created = writes.count
+        }
+        return summary
     }
 
     @discardableResult
@@ -106,6 +137,9 @@ public extension SavedLibrary {
             in: repositoryDID, collection: .bookmarkMetadata, withKey: key
         )
         if let current {
+            guard bookmarkMetadata(current, matches: bookmark) else {
+                throw SavedLibraryError.invalidStoredRecord(uri: current.uri)
+            }
             var next = current.value
             next.state = state
             try await repository.applyWrites(in: repositoryDID, writes: [
@@ -130,7 +164,7 @@ public extension SavedLibrary {
         var writes: [RepositoryWrite] = [
             .delete(collection: .bookmark, key: key, swapRecord: bookmark.cid),
         ]
-        if let metadata {
+        if let metadata, bookmarkMetadata(metadata, matches: bookmark) {
             writes.append(.delete(collection: .bookmarkMetadata, key: key, swapRecord: metadata.cid))
         }
         try await repository.applyWrites(in: repositoryDID, writes: writes)
@@ -154,5 +188,32 @@ public extension SavedLibrary {
             if $0.value.createdAt != $1.value.createdAt { return $0.value.createdAt < $1.value.createdAt }
             return $0.uri < $1.uri
         }.first
+    }
+
+    private func bookmarkMetadataByKey() async throws -> [String: RepositoryRecord<BookmarkMetadata>] {
+        var metadataByKey: [String: RepositoryRecord<BookmarkMetadata>] = [:]
+        var cursor: String?
+        repeat {
+            let page: RecordList<BookmarkMetadata> = try await repository.listRecords(
+                in: repositoryDID,
+                collection: .bookmarkMetadata,
+                limit: 100,
+                startingAfter: cursor
+            )
+            for metadata in page.records {
+                if let key = LexiconURI.recordKey(from: metadata.uri) {
+                    metadataByKey[key] = metadata
+                }
+            }
+            cursor = page.cursor
+        } while cursor != nil
+        return metadataByKey
+    }
+
+    private func bookmarkMetadata(
+        _ metadata: RepositoryRecord<BookmarkMetadata>,
+        matches bookmark: RepositoryRecord<CommunityBookmark>
+    ) -> Bool {
+        metadata.value.bookmarkUri == bookmark.uri && metadata.value.subject == bookmark.value.subject
     }
 }
