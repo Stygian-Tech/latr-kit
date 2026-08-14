@@ -1,3 +1,5 @@
+import Foundation
+
 /// Abstraction over ATProto `com.atproto.repo.*` operations.
 public protocol RepositoryClient: Sendable {
     func listRecords<Value>(
@@ -34,6 +36,26 @@ public protocol RepositoryClient: Sendable {
         withKey key: String,
         swapRecord: String?
     ) async throws
+
+    func applyWrites(in repository: String, writes: [RepositoryWrite]) async throws
+}
+
+public enum RepositoryWrite: Sendable, Equatable {
+    case create(collection: LexiconCollection, key: String, value: JSONValue)
+    case update(collection: LexiconCollection, key: String, value: JSONValue, swapRecord: String)
+    case delete(collection: LexiconCollection, key: String, swapRecord: String?)
+
+    public static func creating(collection: LexiconCollection, key: String, value: some Encodable & Sendable) throws -> Self {
+        RepositoryWrite.create(collection: collection, key: key, value: try encodedJSONValue(value))
+    }
+
+    public static func updating(collection: LexiconCollection, key: String, value: some Encodable & Sendable, swapRecord: String) throws -> Self {
+        RepositoryWrite.update(collection: collection, key: key, value: try encodedJSONValue(value), swapRecord: swapRecord)
+    }
+
+    private static func encodedJSONValue(_ value: some Encodable) throws -> JSONValue {
+        try JSONDecoder().decode(JSONValue.self, from: JSONEncoder().encode(value))
+    }
 }
 
 public extension RepositoryClient {

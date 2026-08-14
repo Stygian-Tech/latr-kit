@@ -5,4 +5,5 @@ public enum SavedLibraryError: Error, Sendable {
     case itemNotFound
     case conflict
     case invalidStoredRecord(uri: String)
+    case bookmarkNotFound
 }

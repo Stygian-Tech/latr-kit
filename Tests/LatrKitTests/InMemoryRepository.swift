@@ -75,6 +75,27 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
         store.removeValue(forKey: storeKey(collection: collection, key: key))
     }
 
+    func applyWrites(in repository: String, writes: [RepositoryWrite]) async throws {
+        var next = store
+        for write in writes {
+            switch write {
+            case let .create(collection, key, value):
+                let uri = "at://\(repository)/\(collection.identifier)/\(key)"
+                next[storeKey(collection: collection, key: key)] = (uri, "bafytest", try JSONEncoder().encode(value))
+            case let .update(collection, key, value, swapRecord):
+                let storeKey = storeKey(collection: collection, key: key)
+                guard next[storeKey]?.cid == swapRecord else { throw RepositoryClientError.conflict }
+                let uri = "at://\(repository)/\(collection.identifier)/\(key)"
+                next[storeKey] = (uri, "bafyupdated", try JSONEncoder().encode(value))
+            case let .delete(collection, key, swapRecord):
+                let storeKey = storeKey(collection: collection, key: key)
+                if let swapRecord, next[storeKey]?.cid != swapRecord { throw RepositoryClientError.conflict }
+                next.removeValue(forKey: storeKey)
+            }
+        }
+        store = next
+    }
+
     func hasRecord(collection: LexiconCollection, key: String) -> Bool {
         store[storeKey(collection: collection, key: key)] != nil
     }
