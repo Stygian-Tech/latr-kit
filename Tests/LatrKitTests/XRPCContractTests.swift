@@ -32,6 +32,18 @@ import Testing
     #expect((object["future"] as? [String: Bool])?["enabled"] == true)
 }
 
+@Test func bookmarkViewDecodesServiceDerivedPreview() throws {
+    let data = Data(#"{"uri":"at://did:plc:test/community.lexicon.bookmarks.bookmark/3abc","cid":"bafybookmark","value":{"$type":"community.lexicon.bookmarks.bookmark","subject":"https://example.com/story","createdAt":"2026-08-13T00:00:00Z"},"preview":{"title":"A story","description":"Summary","image":"https://example.com/og.png","siteName":"Example","author":"Ada"}}"#.utf8)
+
+    let view = try JSONDecoder().decode(BookmarkView.self, from: data)
+
+    #expect(view.preview?.title == "A story")
+    #expect(view.preview?.description == "Summary")
+    #expect(view.preview?.image == "https://example.com/og.png")
+    #expect(view.preview?.siteName == "Example")
+    #expect(view.preview?.author == "Ada")
+}
+
 @Test func validationCountsUTF8Bytes() {
     let oversized = String(repeating: "😀", count: 2_049)
     #expect(throws: LatrPayloadValidationError.exceedsUTF8Limit(field: "url", maximum: 8192)) {

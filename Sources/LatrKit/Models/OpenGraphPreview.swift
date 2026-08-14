@@ -1,7 +1,7 @@
 import Foundation
 
 /// Parsed Open Graph fields merged onto saved records.
-public struct OpenGraphPreview: Sendable, Equatable {
+public struct OpenGraphPreview: Codable, Sendable, Equatable {
     public var title: String?
     public var description: String?
     public var image: String?

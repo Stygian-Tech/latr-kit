@@ -3,9 +3,18 @@ public struct BookmarkView: Codable, Sendable {
     public let cid: String
     public let value: CommunityBookmark
     public let metadataRecord: RepositoryRecord<BookmarkMetadata>?
+    public let preview: OpenGraphPreview?
 
-    public init(record: RepositoryRecord<CommunityBookmark>, metadataRecord: RepositoryRecord<BookmarkMetadata>? = nil) {
-        uri = record.uri; cid = record.cid; value = record.value; self.metadataRecord = metadataRecord
+    public init(
+        record: RepositoryRecord<CommunityBookmark>,
+        metadataRecord: RepositoryRecord<BookmarkMetadata>? = nil,
+        preview: OpenGraphPreview? = nil
+    ) {
+        uri = record.uri
+        cid = record.cid
+        value = record.value
+        self.metadataRecord = metadataRecord
+        self.preview = preview
     }
 }
 
