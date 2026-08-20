@@ -4,11 +4,19 @@ import LatrKit
 final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
     private var store: [String: (uri: String, cid: String, json: Data)] = [:]
     private var beforeNextApplyWrites: (@Sendable ([RepositoryWrite]) async throws -> Void)?
+    private var cidCounter = 0
+    private(set) var appliedWriteBatches: [[RepositoryWrite]] = []
 
     func snapshotKeys() -> [String] { Array(store.keys) }
+    func resetAppliedWriteBatches() { appliedWriteBatches = [] }
 
     private func storeKey(collection: LexiconCollection, key: String) -> String {
         "\(collection.identifier):\(key)"
+    }
+
+    private func nextCID() -> String {
+        cidCounter += 1
+        return "bafytest\(cidCounter)"
     }
 
     func listRecords<Value>(
@@ -51,7 +59,7 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
     ) async throws -> CreateRecordResponse {
         let uri = "at://\(repository)/\(collection.identifier)/\(key)"
         let json = try JSONEncoder().encode(value)
-        store[storeKey(collection: collection, key: key)] = (uri: uri, cid: "bafytest", json: json)
+        store[storeKey(collection: collection, key: key)] = (uri: uri, cid: nextCID(), json: json)
         return CreateRecordResponse(uri: uri)
     }
 
@@ -64,7 +72,11 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
     ) async throws -> UpdateRecordResponse {
         let uri = "at://\(repository)/\(collection.identifier)/\(key)"
         let json = try JSONEncoder().encode(value)
-        store[storeKey(collection: collection, key: key)] = (uri: uri, cid: "bafytest", json: json)
+        let storageKey = storeKey(collection: collection, key: key)
+        if let swapRecord, store[storageKey]?.cid != swapRecord {
+            throw RepositoryClientError.conflict
+        }
+        store[storageKey] = (uri: uri, cid: nextCID(), json: json)
         return UpdateRecordResponse(uri: uri)
     }
 
@@ -89,12 +101,12 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
                 let storeKey = storeKey(collection: collection, key: key)
                 guard next[storeKey] == nil else { throw RepositoryClientError.conflict }
                 let uri = "at://\(repository)/\(collection.identifier)/\(key)"
-                next[storeKey] = (uri, "bafytest", try JSONEncoder().encode(value))
+                next[storeKey] = (uri, nextCID(), try JSONEncoder().encode(value))
             case let .update(collection, key, value, swapRecord):
                 let storeKey = storeKey(collection: collection, key: key)
                 guard next[storeKey]?.cid == swapRecord else { throw RepositoryClientError.conflict }
                 let uri = "at://\(repository)/\(collection.identifier)/\(key)"
-                next[storeKey] = (uri, "bafyupdated", try JSONEncoder().encode(value))
+                next[storeKey] = (uri, nextCID(), try JSONEncoder().encode(value))
             case let .delete(collection, key, swapRecord):
                 let storeKey = storeKey(collection: collection, key: key)
                 if let swapRecord, next[storeKey]?.cid != swapRecord { throw RepositoryClientError.conflict }
@@ -102,6 +114,7 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
             }
         }
         store = next
+        appliedWriteBatches.append(writes)
     }
 
     func hasRecord(collection: LexiconCollection, key: String) -> Bool {

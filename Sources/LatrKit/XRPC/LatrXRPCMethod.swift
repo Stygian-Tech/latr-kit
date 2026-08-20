@@ -8,10 +8,14 @@ public struct LatrXRPCMethod: Hashable, Sendable {
     public var verb: String { kind == .query ? "GET" : "POST" }
 
     public static let listBookmarks = Self("link.latr.bookmarks.listBookmarks", .query)
+    public static let listTags = Self("link.latr.bookmarks.listTags", .query)
     public static let getBookmark = Self("link.latr.bookmarks.getBookmark", .query)
     public static let saveBookmark = Self("link.latr.bookmarks.saveBookmark", .procedure)
     public static let syncBookmarkMetadata = Self("link.latr.bookmarks.syncMetadata", .procedure)
     public static let setBookmarkState = Self("link.latr.bookmarks.setState", .procedure)
+    public static let setBookmarkTags = Self("link.latr.bookmarks.setTags", .procedure)
+    public static let renameBookmarkTag = Self("link.latr.bookmarks.renameTag", .procedure)
+    public static let deleteBookmarkTag = Self("link.latr.bookmarks.deleteTag", .procedure)
     public static let deleteBookmark = Self("link.latr.bookmarks.deleteBookmark", .procedure)
     public static let migrateBookmarks = Self("link.latr.bookmarks.migrateLegacy", .procedure)
 
@@ -32,7 +36,7 @@ public struct LatrXRPCMethod: Hashable, Sendable {
     public static let createKey = Self("link.latr.developer.createKey", .procedure, false)
     public static let revokeKey = Self("link.latr.developer.revokeKey", .procedure, false)
     public static let getUsage = Self("link.latr.developer.getUsage", .query, false)
-    public static let all: [Self] = [.listBookmarks, .getBookmark, .saveBookmark, .syncBookmarkMetadata, .setBookmarkState, .deleteBookmark, .migrateBookmarks, .listItems, .getItem, .saveURL, .saveSubject, .setState, .deleteItem, .migrateLegacy, .getOpenGraph, .resolveURL, .authProbe, .listClients, .createClient, .deleteClient, .listKeys, .createKey, .revokeKey, .getUsage]
+    public static let all: [Self] = [.listBookmarks, .listTags, .getBookmark, .saveBookmark, .syncBookmarkMetadata, .setBookmarkState, .setBookmarkTags, .renameBookmarkTag, .deleteBookmarkTag, .deleteBookmark, .migrateBookmarks, .listItems, .getItem, .saveURL, .saveSubject, .setState, .deleteItem, .migrateLegacy, .getOpenGraph, .resolveURL, .authProbe, .listClients, .createClient, .deleteClient, .listKeys, .createKey, .revokeKey, .getUsage]
 
     private init(_ nsid: String, _ kind: Kind, _ requiresApplicationCredential: Bool = true) {
         self.nsid = nsid; self.kind = kind; self.requiresApplicationCredential = requiresApplicationCredential
