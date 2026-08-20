@@ -6,4 +6,5 @@ public enum SavedLibraryError: Error, Sendable {
     case conflict
     case invalidStoredRecord(uri: String)
     case bookmarkNotFound
+    case invalidTagMutationCursor
 }
