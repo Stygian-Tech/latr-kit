@@ -3,6 +3,7 @@ import LatrKit
 
 final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
     private var store: [String: (uri: String, cid: String, json: Data)] = [:]
+    private var beforeNextApplyWrites: (@Sendable ([RepositoryWrite]) async throws -> Void)?
 
     func snapshotKeys() -> [String] { Array(store.keys) }
 
@@ -23,6 +24,7 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
                 let decoded = try JSONDecoder().decode(Value.self, from: entry.json)
                 return RepositoryRecord(uri: entry.uri, cid: entry.cid, value: decoded)
             }
+            .sorted { $0.uri < $1.uri }
 
         let start = cursor.flatMap { Int($0) } ?? 0
         let pageLimit = limit ?? 100
@@ -75,7 +77,38 @@ final class InMemoryRepository: RepositoryClient, @unchecked Sendable {
         store.removeValue(forKey: storeKey(collection: collection, key: key))
     }
 
+    func applyWrites(in repository: String, writes: [RepositoryWrite]) async throws {
+        if let hook = beforeNextApplyWrites {
+            beforeNextApplyWrites = nil
+            try await hook(writes)
+        }
+        var next = store
+        for write in writes {
+            switch write {
+            case let .create(collection, key, value):
+                let storeKey = storeKey(collection: collection, key: key)
+                guard next[storeKey] == nil else { throw RepositoryClientError.conflict }
+                let uri = "at://\(repository)/\(collection.identifier)/\(key)"
+                next[storeKey] = (uri, "bafytest", try JSONEncoder().encode(value))
+            case let .update(collection, key, value, swapRecord):
+                let storeKey = storeKey(collection: collection, key: key)
+                guard next[storeKey]?.cid == swapRecord else { throw RepositoryClientError.conflict }
+                let uri = "at://\(repository)/\(collection.identifier)/\(key)"
+                next[storeKey] = (uri, "bafyupdated", try JSONEncoder().encode(value))
+            case let .delete(collection, key, swapRecord):
+                let storeKey = storeKey(collection: collection, key: key)
+                if let swapRecord, next[storeKey]?.cid != swapRecord { throw RepositoryClientError.conflict }
+                next.removeValue(forKey: storeKey)
+            }
+        }
+        store = next
+    }
+
     func hasRecord(collection: LexiconCollection, key: String) -> Bool {
         store[storeKey(collection: collection, key: key)] != nil
+    }
+
+    func beforeNextApplyWrites(_ hook: @escaping @Sendable ([RepositoryWrite]) async throws -> Void) {
+        beforeNextApplyWrites = hook
     }
 }

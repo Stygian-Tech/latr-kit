@@ -144,4 +144,8 @@ private struct MockRepository: RepositoryClient {
         withKey key: String,
         swapRecord: String?
     ) async throws {}
+
+    func applyWrites(in repository: String, writes: [RepositoryWrite]) async throws {
+        throw RepositoryClientError.invalidStoredRecord(uri: "mock does not support writes")
+    }
 }
